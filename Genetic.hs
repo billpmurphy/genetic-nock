@@ -4,67 +4,20 @@ import Data.List (genericLength)
 import Control.Monad (liftM)
 import Control.Monad.Random (MonadRandom, getRandom, getRandomR)
 import Nock
+import NockUtils
 
 type MaxDepth = Integer
 type Fitness = Double
 type Problem = Noun -> Fitness
 
 
--- Some utilities for manipulating Nock trees
-
-depth :: Noun -> Integer
-depth n = case n of
-            A x    -> 1
-            x :> y -> 1 + max (depth x) (depth y)
-
-atoms :: Noun -> [Noun]
-atoms n = case n of
-            A x    -> [n]
-            x :> y -> atoms x ++ atoms y
-
-cells :: Noun -> [Noun]
-cells n = case n of
-            A x    -> []
-            x :> y -> [n] ++ cells x ++ cells y
-
-atomIndicies :: Noun -> [Integer]
-atomIndicies = findAIx 1
-  where findAIx i n = case n of
-            A x    -> [i]
-            x :> y -> findAIx (2 * i) x ++ findAIx (2 * i + 1) y
-
-
-cellIndicies :: Noun -> [Integer]
-cellIndicies = findCIx 1
-  where findCIx i n = case n of
-            A x    -> []
-            x :> y -> [i] ++ findCIx (2 * i) x ++ findCIx (2 * i + 1) y
-
-replaceBranchAt :: Noun -> Integer -> Noun -> Noun
-replaceBranchAt noun ix newNoun = replace noun 1
-  where replace tree i | i > ix    = tree
-                       | i == ix   = newNoun
-                       | otherwise = case tree of
-                            A x    -> tree
-                            x :> y -> replace x (2 * i) :> replace y (2 * i + 1)
-
-
--- Utilities for random generation of Nock programs
+-- Random generation of Nock programs
 
 randomAtom :: MonadRandom m => m Noun
 randomAtom = liftM (A . num) getRandom
   where num :: Double -> Integer
         num n | n < 0.35  = 0
-              | n < 0.40  = 1
-              | n < 0.45  = 2
-              | n < 0.50  = 3
-              | n < 0.55  = 4
-              | n < 0.60  = 5
-              | n < 0.65  = 6
-              | n < 0.70  = 7
-              | n < 0.75  = 8
-              | n < 0.80  = 9
-              | otherwise = 9 + floor (-log (1.0 - n) / (1.0/20) + 1.0)
+              | otherwise = floor (-log (1.0 - n) / (1.0/20) + 1.0)
 
 randomCell :: MonadRandom m => MaxDepth -> m Noun
 randomCell r | r <= 1    = randomAtom
@@ -80,41 +33,29 @@ randomExpr :: MonadRandom m => MaxDepth -> m Noun
 randomExpr r | r <= 1    = randomAtom
              | otherwise = getRandom >>= makeExpr
   where makeExpr :: MonadRandom m => Double -> m Noun
-        makeExpr n | n < 0.05  = (A 0 :>) `liftM` randomExpr (r - 1)
-                   | n < 0.10  = (A 1 :>) `liftM` randomExpr (r - 1)
-                   | n < 0.15  = (A 4 :>) `liftM` randomExpr (r - 1)
-                   | n < 0.20  = (A 5 :>) `liftM` randomExpr (r - 1)
-                   | n < 0.25  = do
-                        b <- randomExpr (r - 2)
-                        c <- randomExpr (r - 2)
-                        return $ (A 2 :> b :> c)
-                   | n < 0.30  = do
-                        b <- randomExpr (r - 2)
-                        c <- randomExpr (r - 2)
-                        return $ (A 3 :> b :> c)
-                   | n < 0.35  = do
-                        b <- randomExpr (r - 2)
-                        c <- randomExpr (r - 2)
-                        return $ (A 7 :> b :> c)
-                   | n < 0.40  = do
-                        b <- randomExpr (r - 2)
-                        c <- randomExpr (r - 2)
-                        return $ (A 8 :> b :> c)
-                   | n < 0.45  = do
-                        b <- randomExpr (r - 2)
-                        c <- randomExpr (r - 2)
-                        return $ (A 9 :> b :> c)
-                   | n < 0.50  = do
-                        b <- randomExpr (r - 2)
-                        c <- randomExpr (r - 2)
-                        return $ (A 10 :> b :> c)
-                   | n < 0.55  = do
-                        b <- randomExpr (r - 2)
-                        c <- randomExpr (r - 3)
-                        d <- randomExpr (r - 3)
-                        return $ (A 6 :> b :> c :> d)
+        makeExpr n | n < 0.05  = (A 0 :>) `liftM` a
+                   | n < 0.10  = (A 1 :>) `liftM` a
+                   | n < 0.15  = (A 4 :>) `liftM` a
+                   | n < 0.20  = (A 5 :>) `liftM` a
+                   | n < 0.25  = (A 2 :>) `liftM` bc
+                   | n < 0.30  = (A 3 :>) `liftM` bc
+                   | n < 0.35  = (A 7 :>) `liftM` bc
+                   | n < 0.40  = (A 8 :>) `liftM` bc
+                   | n < 0.45  = (A 9 :>) `liftM` bc
+                   | n < 0.50  = (A 6 :>) `liftM` bcd
+                   | n < 0.55  = (A 10 :>) `liftM` bc
                    | n < 0.75  = randomCell r
                    | otherwise = randomAtom
+        a = randomExpr (r - 1)
+        bc = do
+            b <- randomExpr (r - 2)
+            c <- randomExpr (r - 2)
+            return $ b :> c
+        bcd = do
+            b <- randomExpr (r - 2)
+            c <- randomExpr (r - 3)
+            d <- randomExpr (r - 3)
+            return $ b :> c :> d
 
 
 -- Basic genetic programming operations
